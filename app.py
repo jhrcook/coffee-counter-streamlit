@@ -1,16 +1,40 @@
 #!/usr/bin/env python3
 
 from copy import deepcopy
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
 import streamlit as st
-from bokeh.models.layouts import Column
 from bokeh.models.tools import HoverTool
-from bokeh.plotting import ColumnDataSource, figure, show
+from bokeh.plotting import ColumnDataSource, figure
 
 import coffee_counter as cc
+
+#### ---- App info ---- ####
+
+st.title("Coffee Tracking Analysis")
+
+st.header("A visualization and analysis of my coffee-consumption.")
+
+st.markdown("---")
+
+if st.checkbox("More info"):
+    st.markdown(
+        """
+    **Background:** I have a coffee subscription to [Black Rifle Coffee Company](http://blackriflecoffee.com).
+    I currently order two bags of coffee every two weeks.
+
+    **The problem:** Recently, I have noticed that I often finish my two bags before the arrival of my next order.
+
+    **The solution:** To solve this problem, I have collected data on my coffee consumption, specifically, tracking the lifetimes' of coffee bags and when I brew a cup of coffee with each.
+    I will then use this data to identify the optimal subscription frequency.
+
+    **Implementation:** I have created a web app (using [FastAPI]() and [Deta]()) to store the data and allow simple and fast access from anywhere.
+    I then created a [SwiftBar]() plugin to allow me to [register a cup of coffee from my computers menu bar]() and am working on an iOS application to let me register a cup from my phone.
+
+    ---
+    """
+    )
 
 
 @st.cache(show_spinner=True)
