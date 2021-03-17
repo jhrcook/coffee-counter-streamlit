@@ -29,7 +29,10 @@ if st.button("Refresh Data"):
 
 data["date"] = [d.date() for d in data["datetime"]]
 
-st.write(data)
+# st.write(data)
+
+#### ---- Line plot of uses per day over time ---- ####
+
 
 uses_per_day = data.groupby(["date"])["use_id"].count().reset_index(drop=False)
 uses_per_day["date"] = uses_per_day.date.values.astype(np.datetime64)
@@ -55,15 +58,39 @@ p_num_uses.line(
 p_num_uses.scatter(x="date", y="use_id", source=ColumnDataSource(uses_per_day), size=7)
 st.bokeh_chart(p_num_uses, use_container_width=True)
 
+
+#### ---- Histogram of uses per bag ---- ####
+# source: https://docs.bokeh.org/en/latest/docs/gallery/histogram.html
+# TODO: next to it, add histogram of lifetime of bags.
+
 uses_per_bag = (
     data.groupby(["brand", "name", "bag_id"])["use_id"].count().reset_index(drop=False)
 )
 
-st.write(uses_per_bag)
+num_uses = uses_per_bag["use_id"].values
+hist, edges = np.histogram(num_uses, density=True, bins=3)
+
+p_hist = figure(
+    plot_height=300,
+    y_range=(0, np.max(hist) * 1.02),
+    title="Distribution of cups of coffee per bag",
+)
+p_hist.xaxis.axis_label = "number of cups of coffee"
+p_hist.yaxis.axis_label = "count"
+p_hist.quad(
+    top=hist,
+    bottom=0,
+    left=edges[:-1],
+    right=edges[1:],
+    fill_color="navy",
+    alpha=0.5,
+    line_color="white",
+)
+st.bokeh_chart(p_hist, use_container_width=True)
 
 
-# TODO: histogram and density plot of lifetime of bags
-# https://docs.bokeh.org/en/latest/docs/gallery/histogram.html
-
-# TODO: something like this showing the span for each bag
-# https://docs.bokeh.org/en/latest/docs/gallery/bar_intervals.html
+#### ---- Interval plot of bag lifetimes ---- ####
+# x-axis: date
+# y-axis: unique bag ("BRCC - Beyond Black")
+# For each bag, a bar from its start date to end date.
+# source: https://docs.bokeh.org/en/latest/docs/gallery/bar_intervals.html
