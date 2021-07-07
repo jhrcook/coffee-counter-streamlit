@@ -1,6 +1,5 @@
 black
 bleach
-bokeh==2.3.2
 isort
 mypy
 numpy==1.21.0
