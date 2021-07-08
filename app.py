@@ -70,7 +70,12 @@ if DEV:
 chart_placeholder = st.empty()
 
 n_days_avg = st.slider(
-    label="Days rolling avg.", min_value=1, max_value=10, value=5, step=1, format="%d"
+    label="Days rolling avgerage",
+    min_value=1,
+    max_value=10,
+    value=5,
+    step=1,
+    format="%d",
 )
 
 coffee_uses_per_day = (
@@ -80,14 +85,19 @@ coffee_uses_per_day = (
     .rename(columns={"use_id": "n_cups"})
 )
 
+basic_tooltips = [
+    alt.Tooltip("date:T", title="date"),
+    alt.Tooltip("n_cups:N", title="num.cups"),
+]
+
 cups_over_time_plot = (
     alt.Chart(coffee_uses_per_day)
     .mark_line(opacity=0.5, point=True, strokeDash=[3])
     .encode(
         x="date:T",
         y=alt.Y("n_cups", axis=alt.Axis(title="number of cups")),
-        tooltip=[alt.Tooltip("n_cups:N", title="num. cups")],
     )
+    .encode(tooltip=basic_tooltips)
     .interactive()
 )
 
@@ -95,20 +105,54 @@ cups_rolling_avg = (
     alt.Chart(coffee_uses_per_day)
     .mark_line(color="red", size=3)
     .transform_window(rolling_mean="mean(n_cups)", frame=[-n_days_avg, n_days_avg])
+    .encode(x="date:T", y="rolling_mean:Q")
     .encode(
-        x="date:T",
-        y="rolling_mean:Q",
-        tooltip=[alt.Tooltip("rolling_mean:Q", format=",.2f", title="avg.")],
+        tooltip=basic_tooltips
+        + [alt.Tooltip("rolling_mean:Q", format=",.2f", title="rolling avg.")]
     )
 )
 
 cups_per_day_with_rolling_avg = (cups_over_time_plot + cups_rolling_avg).properties(
     title="Cups of coffee consumed per day"
 )
-
 chart_placeholder.altair_chart(cups_per_day_with_rolling_avg, use_container_width=True)
 
 #### ---- Historgrams of uses per day and per bag ---- ####
+
+col1, col2 = st.beta_columns(2)
+
+
+def altair_histogram(df: pd.DataFrame) -> alt.Chart:
+    return (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            alt.X("n_cups:Q", bin=True),
+            y="count()",
+            tooltip=[
+                alt.Tooltip("count():N", title="count"),
+                alt.Tooltip("n_cups:Q", bin=True, title="num. cups"),
+            ],
+        )
+        .interactive()
+    )
+
+
+with col1:
+    cups_per_day_histogram = altair_histogram(coffee_uses_per_day)
+    st.altair_chart(cups_per_day_histogram)
+
+cups_per_bag_df = (
+    coffee_use_data.groupby("bag_id")[["use_id"]]
+    .count()
+    .reset_index(drop=False)
+    .rename(columns={"use_id": "n_cups"})
+)
+
+with col2:
+    # st.dataframe(cups_per_bag_df)
+    cups_per_bag_histogram = altair_histogram(cups_per_bag_df)
+    st.altair_chart(cups_per_bag_histogram)
 
 
 #### ---- Horizontal bars showing lifetimes of bags ---- ####
