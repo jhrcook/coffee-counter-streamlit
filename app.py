@@ -4,7 +4,7 @@
 
 from copy import deepcopy
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Dict, Optional
 
 import altair as alt
 import pandas as pd
@@ -141,7 +141,6 @@ def altair_histogram(
             ],
         )
         .properties(title=title)
-        .interactive()
     )
 
 
@@ -174,6 +173,55 @@ with col2:
 
 #### ---- Horizontal bars showing lifetimes of bags ---- ####
 
+coffee_bag_lifetime_df = (
+    coffee_use_data[["bag_id", "name", "weight", "start", "finish", "active"]]
+    .drop_duplicates()
+    .sort_values(["start", "finish", "name"])
+    .reset_index(drop=True)
+)
+
+if DEV:
+    st.dataframe(coffee_bag_lifetime_df)
+
+bag_id_order = coffee_bag_lifetime_df["bag_id"].values
+
+bag_color_palette: Dict[str, str] = {
+    "Beyond Black": "#353232",
+    "Coffee or Die": "#6B2121",
+    "Escape Goat": "#3FEFAC",
+    "Flying Elk": "#FFE94A",
+    "Gunship": "silver",
+    "Liberty": "red",
+    "Magia del Campo": "#4ECE4E",
+    "Mind, Body & Soul": "#BA2121",
+    "Power Llama": "#3749A2",
+    "Silencer Smooth": "#B8CCF2",
+    "Space Bear": "#DE9153",
+    "Tactisquatch": "#D8553A",
+}
+
+bag_color_scale = alt.Scale(
+    domain=list(bag_color_palette.keys()), range=list(bag_color_palette.values())
+)
+
+bag_lifetime_plot = (
+    alt.Chart(coffee_bag_lifetime_df)
+    .mark_bar()
+    .encode(
+        x=alt.X("start", title="lifetime of the bag"),
+        x2="finish",
+        y=alt.Y(
+            "bag_id",
+            sort=bag_id_order,
+            axis=alt.Axis(labels=False, ticks=False),
+            title="individual bags of coffee",
+        ),
+        color=alt.Color("name", scale=bag_color_scale, title="bag name"),
+        tooltip=[alt.Tooltip("name"), alt.Tooltip("start"), alt.Tooltip("finish")],
+    )
+)
+
+st.altair_chart(bag_lifetime_plot, use_container_width=True)
 
 #### ---- Notes on coffee use and other relevant comments ---- ####
 
