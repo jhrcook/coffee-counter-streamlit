@@ -4,7 +4,7 @@
 
 from copy import deepcopy
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Optional
 
 import altair as alt
 import pandas as pd
@@ -12,8 +12,13 @@ import streamlit as st
 
 import coffee_counter as cc
 import informational_text
+from palettes import bag_color_palette
 
 DEV = False
+
+#### ---- General plot config ---- ####
+
+background_kwargs = {"fill": "white", "fillOpacity": 0.15}
 
 #### ---- App info ---- ####
 
@@ -77,20 +82,29 @@ basic_tooltips = [
     alt.Tooltip("n_cups:N", title="num.cups"),
 ]
 
+point_color = "#029CFA"
+
 cups_over_time_plot = (
     alt.Chart(coffee_uses_per_day)
-    .mark_line(opacity=0.5, point=True, strokeDash=[3])
+    .mark_line(opacity=0.25, strokeDash=[0], size=2, cornerRadius=20, color=point_color)
     .encode(
         x="date:T",
         y=alt.Y("n_cups", axis=alt.Axis(title="number of cups")),
     )
-    .encode(tooltip=basic_tooltips)
-    .interactive()
-)
+) + (
+    alt.Chart(coffee_uses_per_day)
+    .mark_point(size=20, color=point_color, fill=point_color)
+    .encode(
+        x="date:T",
+        y=alt.Y("n_cups", axis=alt.Axis(title="number of cups")),
+    )
+).encode(
+    tooltip=basic_tooltips
+).interactive()
 
 cups_rolling_avg = (
     alt.Chart(coffee_uses_per_day)
-    .mark_line(color="red", size=3)
+    .mark_line(color="#FFA901", size=4, opacity=0.9)
     .transform_window(rolling_mean="mean(n_cups)", frame=[-n_days_avg, n_days_avg])
     .encode(x="date:T", y="rolling_mean:Q")
     .encode(
@@ -99,8 +113,10 @@ cups_rolling_avg = (
     )
 )
 
-cups_per_day_with_rolling_avg = (cups_over_time_plot + cups_rolling_avg).properties(
-    title="Cups of coffee consumed per day"
+cups_per_day_with_rolling_avg = (
+    (cups_over_time_plot + cups_rolling_avg)
+    .properties(title="Cups of coffee consumed per day")
+    .configure_view(**background_kwargs)
 )
 chart_placeholder.altair_chart(cups_per_day_with_rolling_avg, use_container_width=True)
 
@@ -141,6 +157,7 @@ def altair_histogram(
             ],
         )
         .properties(title=title)
+        .configure_view(**background_kwargs)
     )
 
 
@@ -185,28 +202,15 @@ if DEV:
 
 bag_id_order = coffee_bag_lifetime_df["bag_id"].values
 
-bag_color_palette: Dict[str, str] = {
-    "Beyond Black": "#353232",
-    "Coffee or Die": "#6B2121",
-    "Escape Goat": "#3FEFAC",
-    "Flying Elk": "#FFE94A",
-    "Gunship": "silver",
-    "Liberty": "red",
-    "Magia del Campo": "#4ECE4E",
-    "Mind, Body & Soul": "#BA2121",
-    "Power Llama": "#3749A2",
-    "Silencer Smooth": "#B8CCF2",
-    "Space Bear": "#DE9153",
-    "Tactisquatch": "#D8553A",
-}
 
 bag_color_scale = alt.Scale(
     domain=list(bag_color_palette.keys()), range=list(bag_color_palette.values())
 )
 
+# TODO: change from horizontal bar to dumb-bell plot.
 bag_lifetime_plot = (
     alt.Chart(coffee_bag_lifetime_df)
-    .mark_bar()
+    .mark_bar(cornerRadius=5, height=5)
     .encode(
         x=alt.X("start", title="lifetime of the bag"),
         x2="finish",
@@ -217,8 +221,25 @@ bag_lifetime_plot = (
             title="individual bags of coffee",
         ),
         color=alt.Color("name", scale=bag_color_scale, title="bag name"),
-        tooltip=[alt.Tooltip("name"), alt.Tooltip("start"), alt.Tooltip("finish")],
+        tooltip=[alt.Tooltip("name"), alt.Tooltip("start:T"), alt.Tooltip("finish:T")],
     )
+)
+
+for x in ("start", "finish"):
+    bag_lifetime_plot += (
+        alt.Chart(coffee_bag_lifetime_df)
+        .mark_point(size=90, opacity=1.0)
+        .encode(
+            x=x,
+            y=alt.Y("bag_id", sort=bag_id_order),
+            fill=alt.Fill("name", scale=bag_color_scale, title="bag name"),
+            color=alt.Color("name", scale=bag_color_scale, title="bag name"),
+        )
+    )
+
+
+bag_lifetime_plot = bag_lifetime_plot.configure_axisY(grid=True).configure_view(
+    **background_kwargs
 )
 
 st.altair_chart(bag_lifetime_plot, use_container_width=True)
