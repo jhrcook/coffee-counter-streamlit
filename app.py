@@ -3,14 +3,22 @@
 """A Streamlit application for visualizing and analyzing my coffee consumption."""
 
 from copy import deepcopy
+from datetime import datetime, timedelta
+from typing import Optional
 
-import numpy as np
+import altair as alt
 import pandas as pd
 import streamlit as st
-from bokeh.models.tools import HoverTool
-from bokeh.plotting import ColumnDataSource, figure
 
 import coffee_counter as cc
+import informational_text
+from palettes import bag_color_palette
+
+DEV = False
+
+#### ---- General plot config ---- ####
+
+background_kwargs = {"fill": "white", "fillOpacity": 0.15}
 
 #### ---- App info ---- ####
 
@@ -20,20 +28,7 @@ st.header("A visualization and analysis of my coffee-consumption.")
 
 more_info_expander = st.beta_expander("More info")
 with more_info_expander:
-    st.markdown(
-        """
-    **Background:** I have a coffee subscription to [Black Rifle Coffee Company](http://blackriflecoffee.com).
-    I currently order two bags of coffee every two weeks.
-
-    **The problem:** Recently, I have noticed that I often finish my two bags before the arrival of my next order.
-
-    **The solution:** To solve this problem, I have collected data on my coffee consumption, specifically, tracking the lifetimes' of coffee bags and when I brew a cup of coffee with each.
-    I will then use this data to identify the optimal subscription frequency.
-
-    **Implementation:** I have created a [web API](https://a7a9ck.deta.dev/docs) ([source](https://github.com/jhrcook/coffee-counter-api); using [FastAPI](https://fastapi.tiangolo.com) and [Deta](https://www.deta.sh)) to store the data and allow simple and fast access from anywhere.
-    I then created a [SwiftBar](https://swiftbar.app) plugin to allow me to [register a cup of coffee from my computers menu bar](https://github.com/jhrcook/SwiftBar-Plugins/blob/master/coffee-tracker.1h.py) and am working on an iOS application to let me register a cup from my phone.
-    """
-    )
+    st.markdown(informational_text.more_info())
 
 st.markdown(" ")  # A bit of space between 'More info' and 'Refresh' button.
 
@@ -48,123 +43,215 @@ def load_data() -> pd.DataFrame:
 
 
 _data = load_data()
-data = deepcopy(_data)
+coffee_use_data = deepcopy(_data)
 
 if st.button("Refresh Data"):
     _data.assign(col="hey")
     _data = load_data()
 
-data["date"] = [d.date() for d in data["datetime"]]
+coffee_use_data["date"] = [d.date() for d in coffee_use_data["datetime"]]
+coffee_use_data["finish"] = [
+    d if d is not None else datetime.today().date() for d in coffee_use_data["finish"]
+]
 
+if DEV:
+    st.dataframe(coffee_use_data)
 
 #### ---- Line plot of uses per day over time ---- ####
 
-uses_per_day = data.groupby(["date"])["use_id"].count().reset_index(drop=False)
-uses_per_day["date"] = uses_per_day.date.values.astype(np.datetime64)
+chart_placeholder = st.empty()
 
-hover_tool = HoverTool(
-    tooltips=[("date", "@date{%F}"), ("num. uses", "@use_id")],
-    formatters={"@date": "datetime"},
-    mode="vline",
+n_days_avg = st.slider(
+    label="Days rolling avgerage",
+    min_value=1,
+    max_value=10,
+    value=5,
+    step=1,
+    format="%d",
 )
 
-p_num_uses = figure(
-    x_axis_type="datetime",
-    x_range=(uses_per_day.date[0], uses_per_day.date.values[-1]),
-    tools=[hover_tool, "pan,wheel_zoom,zoom_in,zoom_out,box_zoom,reset,tap,save"],
-    plot_height=400,
+coffee_uses_per_day = (
+    coffee_use_data.groupby("date")[["use_id"]]
+    .count()
+    .reset_index(drop=False)
+    .rename(columns={"use_id": "n_cups"})
 )
 
-p_num_uses.xaxis.axis_label = "date"
-p_num_uses.yaxis.axis_label = "number of cups of coffee"
-p_num_uses.line(
-    x="date", y="use_id", source=ColumnDataSource(uses_per_day), alpha=0.5, width=3
-)
-p_num_uses.scatter(x="date", y="use_id", source=ColumnDataSource(uses_per_day), size=7)
+basic_tooltips = [
+    alt.Tooltip("date:T", title="date"),
+    alt.Tooltip("n_cups:N", title="num.cups"),
+]
 
-st.subheader("Number of cups over time")
-st.bokeh_chart(p_num_uses, use_container_width=True)
+point_color = "#029CFA"
 
+cups_over_time_plot = (
+    alt.Chart(coffee_uses_per_day)
+    .mark_line(opacity=0.25, strokeDash=[0], size=2, cornerRadius=20, color=point_color)
+    .encode(
+        x="date:T",
+        y=alt.Y("n_cups", axis=alt.Axis(title="number of cups")),
+    )
+) + (
+    alt.Chart(coffee_uses_per_day)
+    .mark_point(size=20, color=point_color, fill=point_color)
+    .encode(
+        x="date:T",
+        y=alt.Y("n_cups", axis=alt.Axis(title="number of cups")),
+    )
+).encode(
+    tooltip=basic_tooltips
+).interactive()
 
-#### ---- Histogram of uses per day ---- ####
-# source: https://docs.bokeh.org/en/latest/docs/gallery/histogram.html
-
-barplot_col1, barplot_col2 = st.beta_columns(2)
-
-BARPLOT_HEIGHT = 300
-
-num_uses = uses_per_day["use_id"].values
-hist, edges = np.histogram(num_uses, density=True, bins=5)
-
-p_hist = figure(
-    plot_height=BARPLOT_HEIGHT,
-    y_range=(0, np.max(hist) * 1.02),
-)
-p_hist.xaxis.axis_label = "number of cups of coffee"
-p_hist.yaxis.axis_label = "frequency"
-p_hist.quad(
-    top=hist,
-    bottom=0,
-    left=edges[:-1],
-    right=edges[1:],
-    fill_color="navy",
-    alpha=0.5,
-    line_color="white",
-)
-
-p_hist.add_tools(
-    HoverTool(
-        tooltips=[
-            ("cups per day", "@left{1.1} - @right{1.1}"),
-            ("frequency", "@top{1.11}"),
-        ],
+cups_rolling_avg = (
+    alt.Chart(coffee_uses_per_day)
+    .mark_line(color="#FFA901", size=4, opacity=0.9)
+    .transform_window(rolling_mean="mean(n_cups)", frame=[-n_days_avg, n_days_avg])
+    .encode(x="date:T", y="rolling_mean:Q")
+    .encode(
+        tooltip=basic_tooltips
+        + [alt.Tooltip("rolling_mean:Q", format=",.2f", title="rolling avg.")]
     )
 )
 
-barplot_col1.subheader("Cups of coffee per day")
-barplot_col1.bokeh_chart(p_hist, use_container_width=True)
+cups_per_day_with_rolling_avg = (
+    (cups_over_time_plot + cups_rolling_avg)
+    .properties(title="Cups of coffee consumed per day")
+    .configure_view(**background_kwargs)
+)
+chart_placeholder.altair_chart(cups_per_day_with_rolling_avg, use_container_width=True)
 
-#### ---- Histogram of uses per bag ---- ####
+last_week_avg = coffee_uses_per_day[
+    coffee_uses_per_day.date >= (datetime.today().date() - timedelta(days=7))
+].n_cups.mean()
 
-uses_per_bag = (
-    data.groupby(["brand", "name", "bag_id"])["use_id"].count().reset_index(drop=False)
+
+st.markdown(
+    f"""
+The plot above shows the number of cups of coffee I've had since I began tracking.
+Over the entire {coffee_uses_per_day.shape[0]} days, I have averaged {coffee_uses_per_day["n_cups"].mean():0.2f} cups of coffee per day.
+Over the last week, I have averaged {last_week_avg:0.2f} cups.
+"""
 )
 
-use_histogram_df = (
-    uses_per_bag.groupby(["use_id"])["bag_id"].count().reset_index(drop=False)
+#### ---- Historgrams of uses per day and per bag ---- ####
+
+col1, col2 = st.beta_columns(2)
+
+
+def altair_histogram(
+    df: pd.DataFrame,
+    x_title: Optional[str] = "number of cups",
+    y_title: Optional[str] = "count",
+    title: str = "",
+    bin_tooltip: bool = True,
+) -> alt.Chart:
+    return (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            x=alt.X("n_cups:Q", bin=True, title=x_title),
+            y=alt.Y("count()", title=y_title),
+            tooltip=[
+                alt.Tooltip("count():N", title="count"),
+                alt.Tooltip("n_cups:N", bin=bin_tooltip, title="num. cups"),
+            ],
+        )
+        .properties(title=title)
+        .configure_view(**background_kwargs)
+    )
+
+
+with col1:
+    cups_per_day_histogram = altair_histogram(
+        coffee_uses_per_day,
+        x_title="number of cups",
+        title="Distribution of cups of coffee per day",
+        bin_tooltip=False,
+    )
+    st.altair_chart(cups_per_day_histogram)
+
+cups_per_bag_df = (
+    coffee_use_data.query("active == 0")
+    .groupby("bag_id")[["use_id"]]
+    .count()
+    .reset_index(drop=False)
+    .rename(columns={"use_id": "n_cups"})
 )
 
-p_cups_per_bag = figure(
-    plot_height=BARPLOT_HEIGHT,
-    y_range=(0, np.max(use_histogram_df.bag_id)),
+with col2:
+    # st.dataframe(cups_per_bag_df)
+    cups_per_bag_histogram = altair_histogram(
+        cups_per_bag_df,
+        x_title="number of cups",
+        title="Distribution of cups of coffee per coffee bag",
+    )
+    st.altair_chart(cups_per_bag_histogram)
+
+
+#### ---- Horizontal bars showing lifetimes of bags ---- ####
+
+coffee_bag_lifetime_df = (
+    coffee_use_data[["bag_id", "name", "weight", "start", "finish", "active"]]
+    .drop_duplicates()
+    .sort_values(["start", "finish", "name"])
+    .reset_index(drop=True)
 )
 
-p_cups_per_bag.xaxis.axis_label = "number of cups of coffee"
-p_cups_per_bag.yaxis.axis_label = "count"
+if DEV:
+    st.dataframe(coffee_bag_lifetime_df)
 
-p_cups_per_bag.vbar(
-    x="use_id",
-    top="bag_id",
-    bottom=0,
-    width=1,
-    fill_color="navy",
-    alpha=0.5,
-    line_color="white",
-    hover_line_color="navy",
-    source=ColumnDataSource(use_histogram_df),
-)
-p_cups_per_bag.add_tools(
-    HoverTool(tooltips=[("num. bags", "@bag_id"), ("num. cups", "@use_id")])
+bag_id_order = coffee_bag_lifetime_df["bag_id"].values
+
+
+bag_color_scale = alt.Scale(
+    domain=list(bag_color_palette.keys()), range=list(bag_color_palette.values())
 )
 
+# TODO: change from horizontal bar to dumb-bell plot.
+bag_lifetime_plot = (
+    alt.Chart(coffee_bag_lifetime_df)
+    .mark_bar(cornerRadius=5, height=5)
+    .encode(
+        x=alt.X("start", title="lifetime of the bag"),
+        x2="finish",
+        y=alt.Y(
+            "bag_id",
+            sort=bag_id_order,
+            axis=alt.Axis(labels=False, ticks=False),
+            title="individual bags of coffee",
+        ),
+        color=alt.Color("name", scale=bag_color_scale, title="bag name"),
+        tooltip=[alt.Tooltip("name"), alt.Tooltip("start:T"), alt.Tooltip("finish:T")],
+    )
+)
 
-barplot_col2.subheader("Cups of coffee per bag")
-barplot_col2.bokeh_chart(p_cups_per_bag, use_container_width=True)
+for x in ("start", "finish"):
+    bag_lifetime_plot += (
+        alt.Chart(coffee_bag_lifetime_df)
+        .mark_point(size=90, opacity=1.0)
+        .encode(
+            x=x,
+            y=alt.Y("bag_id", sort=bag_id_order),
+            fill=alt.Fill("name", scale=bag_color_scale, title="bag name"),
+            color=alt.Color("name", scale=bag_color_scale, title="bag name"),
+        )
+    )
 
 
-#### ---- Interval plot of bag lifetimes ---- ####
-# TODO
-# x-axis: date
-# y-axis: unique bag ("BRCC - Beyond Black")
-# For each bag, a bar from its start date to end date.
-# source: https://docs.bokeh.org/en/latest/docs/gallery/bar_intervals.html
+bag_lifetime_plot = bag_lifetime_plot.configure_axisY(grid=True).configure_view(
+    **background_kwargs
+)
+
+st.altair_chart(bag_lifetime_plot, use_container_width=True)
+
+#### ---- Notes on coffee use and other relevant comments ---- ####
+
+st.markdown("---")
+
+notes_expander = st.beta_expander("Notes", expanded=DEV)
+with notes_expander:
+    st.markdown(informational_text.notes())
+
+recipes_expander = st.beta_expander("Recipes", expanded=DEV)
+with recipes_expander:
+    st.markdown(informational_text.recipes())

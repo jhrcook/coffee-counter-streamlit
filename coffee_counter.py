@@ -17,6 +17,7 @@ class CoffeeBag(BaseModel):
     start: date
     finish: Optional[date] = None
     bag_id: str
+    active: bool
 
 
 class CoffeeUse(BaseModel):
@@ -26,10 +27,14 @@ class CoffeeUse(BaseModel):
 
 
 class CoffeeCounter:
-    coffee_bags: List[CoffeeBag] = []
-    coffee_uses: List[CoffeeUse] = []
+    coffee_bags: List[CoffeeBag]
+    coffee_uses: List[CoffeeUse]
 
     BatchResponse = Dict[str, Dict[str, Any]]
+
+    def __init__(self) -> None:
+        self.coffee_bags = []
+        self.coffee_uses = []
 
     def bags_response_to_bags(self, info=BatchResponse) -> List[CoffeeBag]:
         return [CoffeeBag(bag_id=k, **i) for k, i in info.items()]
