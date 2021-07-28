@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 import pandas as pd
 import requests
@@ -27,19 +27,19 @@ class CoffeeUse(BaseModel):
 
 
 class CoffeeCounter:
-    coffee_bags: List[CoffeeBag]
-    coffee_uses: List[CoffeeUse]
+    coffee_bags: list[CoffeeBag]
+    coffee_uses: list[CoffeeUse]
 
-    BatchResponse = Dict[str, Dict[str, Any]]
+    BatchResponse = dict[str, dict[str, Any]]
 
     def __init__(self) -> None:
         self.coffee_bags = []
         self.coffee_uses = []
 
-    def bags_response_to_bags(self, info=BatchResponse) -> List[CoffeeBag]:
+    def bags_response_to_bags(self, info=BatchResponse) -> list[CoffeeBag]:
         return [CoffeeBag(bag_id=k, **i) for k, i in info.items()]
 
-    def uses_response_to_uses(self, info=BatchResponse) -> List[CoffeeUse]:
+    def uses_response_to_uses(self, info=BatchResponse) -> list[CoffeeUse]:
         return [CoffeeUse(use_id=k, **i) for k, i in info.items()]
 
     def display_failed_response(self, res: requests.Response):
@@ -67,9 +67,9 @@ class CoffeeCounter:
         self.get_coffee_uses()
 
     def modellist_to_dict(
-        self, models: Union[List[CoffeeUse], List[CoffeeBag]]
-    ) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+        self, models: Union[list[CoffeeUse], list[CoffeeBag]]
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {}
         fields = models[0].__fields__
         for field in fields:
             data[field] = [m.dict()[field] for m in models]
