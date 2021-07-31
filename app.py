@@ -147,7 +147,7 @@ def altair_histogram(
 ) -> alt.Chart:
     return (
         alt.Chart(df)
-        .mark_bar()
+        .mark_bar(fill="#CE2E78")
         .encode(
             x=alt.X("n_cups:Q", bin=True, title=x_title),
             y=alt.Y("count()", title=y_title),
@@ -207,7 +207,6 @@ bag_color_scale = alt.Scale(
     domain=list(bag_color_palette.keys()), range=list(bag_color_palette.values())
 )
 
-# TODO: change from horizontal bar to dumb-bell plot.
 bag_lifetime_plot = (
     alt.Chart(coffee_bag_lifetime_df)
     .mark_bar(cornerRadius=5, height=5)
