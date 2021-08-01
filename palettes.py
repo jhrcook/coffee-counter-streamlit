@@ -12,4 +12,5 @@ bag_color_palette: dict[str, str] = {
     "Space Bear": "#DE9153",
     "Tactisquatch": "#D8553A",
     "Blackbeard's Delight": "#7F2E28",
+    "House Blend": "#2CADE1",
 }
