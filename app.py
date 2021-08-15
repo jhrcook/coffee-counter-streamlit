@@ -12,7 +12,7 @@ import streamlit as st
 
 import coffee_counter as cc
 import informational_text
-from palettes import bag_color_palette
+from palettes import bag_color_palette, fill_in_missing_bags
 
 DEV = False
 
@@ -35,7 +35,7 @@ st.markdown(" ")  # A bit of space between 'More info' and 'Refresh' button.
 #### ---- Data ---- ####
 
 
-@st.cache(show_spinner=True)
+@st.cache(show_spinner=True, persist=False)
 def load_data() -> pd.DataFrame:
     coffee_counter = cc.CoffeeCounter()
     coffee_counter.get_coffee_data()
@@ -46,8 +46,9 @@ _data = load_data()
 coffee_use_data = deepcopy(_data)
 
 if st.button("Refresh Data"):
-    _data.assign(col="hey")
+    _data.assign(col="hey")  # Mutate to cause cache invalidation.
     _data = load_data()
+    coffee_use_data = deepcopy(_data)
 
 coffee_use_data["date"] = [d.date() for d in coffee_use_data["datetime"]]
 coffee_use_data["finish"] = [
@@ -203,9 +204,11 @@ if DEV:
 bag_id_order = coffee_bag_lifetime_df["bag_id"].values
 
 
-bag_color_scale = alt.Scale(
-    domain=list(bag_color_palette.keys()), range=list(bag_color_palette.values())
+bag_pal = fill_in_missing_bags(
+    bag_color_palette, bags=coffee_bag_lifetime_df.name.unique()
 )
+
+bag_color_scale = alt.Scale(domain=list(bag_pal.keys()), range=list(bag_pal.values()))
 
 bag_lifetime_plot = (
     alt.Chart(coffee_bag_lifetime_df)
